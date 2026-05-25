@@ -10,9 +10,9 @@ permissions:
   contents: write
 
 jobs:
-  # ──────────────────────────────────────────────
+  # ------------------------------------------------
   # Create development branch if it doesn't exist
-  # ──────────────────────────────────────────────
+  # ------------------------------------------------
   create-development-branch:
     name: Create development branch
     runs-on: ubuntu-latest
@@ -27,19 +27,23 @@ jobs:
           EXISTS=$(gh api repos/${{ github.repository }}/branches/development \
             --silent --jq '.name' 2>/dev/null || echo "")
           if [ -z "$EXISTS" ]; then
+            MAIN_SHA=$(gh api repos/${{ github.repository }}/git/ref/heads/main --jq '.object.sha')
             gh api repos/${{ github.repository }}/git/refs \
               -f ref="refs/heads/development" \
-              -f sha="$(gh api repos/${{ github.repository }}/git/ref/heads/main --jq '.object.sha')"
-            echo "development branch created."
+              -f sha="$MAIN_SHA"
+            echo "development branch created from main."
           else
             echo "development branch already exists."
           fi
 
-  # ──────────────────────────────────────────────
-  # Protect main — no direct pushes, PR required,
-  # only merges from development are valid
-  # (enforced via validate-merge-source.yml)
-  # ──────────────────────────────────────────────
+  # ------------------------------------------------
+  # Protect main:
+  #   - No direct pushes allowed (for anyone)
+  #   - PRs require 1 approving review
+  #   - Only merges from development are allowed
+  #     (enforced by validate-merge-source.yml)
+  #   - enforce_admins: true (even admins can't bypass)
+  # ------------------------------------------------
   protect-main:
     name: Protect main branch
     runs-on: ubuntu-latest
@@ -47,12 +51,9 @@ jobs:
     steps:
       - name: Apply main branch protection
         env:
-          GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          gh api \
-            --method PUT \
-            repos/${{ github.repository }}/branches/main/protection \
-            --input - <<'EOF'
+          cat > /tmp/main-protection.json << 'PAYLOAD'
           {
             "required_status_checks": {
               "strict": true,
@@ -62,12 +63,7 @@ jobs:
             "required_pull_request_reviews": {
               "dismiss_stale_reviews": true,
               "require_code_owner_reviews": false,
-              "required_approving_review_count": 1,
-              "bypass_pull_request_allowances": {
-                "users": [],
-                "teams": [],
-                "apps": []
-              }
+              "required_approving_review_count": 1
             },
             "restrictions": null,
             "allow_force_pushes": false,
@@ -75,13 +71,23 @@ jobs:
             "required_linear_history": false,
             "required_conversation_resolution": true
           }
-          EOF
+          PAYLOAD
+
+          gh api \
+            --method PUT \
+            "repos/${{ github.repository }}/branches/main/protection" \
+            --input /tmp/main-protection.json
+
           echo "main branch protection applied."
 
-  # ──────────────────────────────────────────────
-  # Protect development — PR required for everyone
-  # except sharvil1701 who can push directly
-  # ──────────────────────────────────────────────
+  # ------------------------------------------------
+  # Protect development:
+  #   - PRs required for everyone (feature/* -> development)
+  #   - sharvil1701 can push directly (bypasses PR requirement)
+  #   - enforce_admins: false (so owner bypass works)
+  #   - Only development -> main merges allowed (handled by
+  #     validate-merge-source.yml on main)
+  # ------------------------------------------------
   protect-development:
     name: Protect development branch
     runs-on: ubuntu-latest
@@ -89,19 +95,16 @@ jobs:
     steps:
       - name: Apply development branch protection
         env:
-          GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          gh api \
-            --method PUT \
-            repos/${{ github.repository }}/branches/development/protection \
-            --input - <<'EOF'
+          cat > /tmp/dev-protection.json << 'PAYLOAD'
           {
             "required_status_checks": null,
             "enforce_admins": false,
             "required_pull_request_reviews": {
               "dismiss_stale_reviews": true,
               "require_code_owner_reviews": false,
-              "required_approving_review_count": 0,
+              "required_approving_review_count": 1,
               "bypass_pull_request_allowances": {
                 "users": ["sharvil1701"],
                 "teams": [],
@@ -114,5 +117,11 @@ jobs:
             "required_linear_history": false,
             "required_conversation_resolution": false
           }
-          EOF
+          PAYLOAD
+
+          gh api \
+            --method PUT \
+            "repos/${{ github.repository }}/branches/development/protection" \
+            --input /tmp/dev-protection.json
+
           echo "development branch protection applied."
