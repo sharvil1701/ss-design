@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  administration: write
 
 jobs:
   # ──────────────────────────────────────────────
@@ -48,7 +47,7 @@ jobs:
     steps:
       - name: Apply main branch protection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           gh api \
             --method PUT \
@@ -90,7 +89,7 @@ jobs:
     steps:
       - name: Apply development branch protection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           gh api \
             --method PUT \
