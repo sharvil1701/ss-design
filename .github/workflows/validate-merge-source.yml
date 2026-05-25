@@ -1,0 +1,26 @@
+name: Validate Merge Source
+
+# Blocks any PR targeting main whose source is NOT development.
+# This check is required by main's branch protection rules,
+# so it must pass before a PR can be merged.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-merge-source:
+    name: validate-merge-source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure PR comes from development
+        run: |
+          SOURCE="${{ github.head_ref }}"
+          echo "PR source branch: $SOURCE"
+          if [ "$SOURCE" != "development" ]; then
+            echo "::error::PRs to main are only allowed from the 'development' branch."
+            echo "::error::This PR originates from '$SOURCE'. Please merge into development first."
+            exit 1
+          fi
+          echo "Source branch is 'development'. Merge is allowed."
