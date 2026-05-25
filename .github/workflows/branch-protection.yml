@@ -11,27 +11,13 @@ permissions:
 
 jobs:
   setup:
-    name: Create branch & apply protection rules
+    name: Apply branch protection rules
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}
       REPO: ${{ github.repository }}
 
     steps:
-      - name: Create development branch if missing
-        run: |
-          STATUS=$(gh api repos/$REPO/branches/development \
-            --jq '.name' 2>/dev/null || echo "")
-          if [ -z "$STATUS" ]; then
-            SHA=$(gh api repos/$REPO/git/ref/heads/main --jq '.object.sha')
-            gh api repos/$REPO/git/refs \
-              -f ref="refs/heads/development" \
-              -f sha="$SHA"
-            echo "development branch created."
-          else
-            echo "development branch already exists, skipping creation."
-          fi
-
       - name: Protect main branch
         run: |
           gh api --method PUT repos/$REPO/branches/main/protection \
@@ -39,23 +25,18 @@ jobs:
           {
             "required_status_checks": {
               "strict": true,
-              "contexts": ["validate-merge-source"]
+              "contexts": []
             },
             "enforce_admins": true,
             "required_pull_request_reviews": {
               "dismiss_stale_reviews": true,
               "require_code_owner_reviews": false,
-              "required_approving_review_count": 1,
-              "bypass_pull_request_allowances": {
-                "users": [],
-                "teams": [],
-                "apps": []
-              }
+              "required_approving_review_count": 1
             },
             "restrictions": null,
             "allow_force_pushes": false,
             "allow_deletions": false,
-            "required_linear_history": false,
+            "required_linear_history": true,
             "required_conversation_resolution": true
           }
           EOF
@@ -71,12 +52,7 @@ jobs:
             "required_pull_request_reviews": {
               "dismiss_stale_reviews": true,
               "require_code_owner_reviews": false,
-              "required_approving_review_count": 0,
-              "bypass_pull_request_allowances": {
-                "users": ["sharvil1701"],
-                "teams": [],
-                "apps": []
-              }
+              "required_approving_review_count": 0
             },
             "restrictions": null,
             "allow_force_pushes": false,
